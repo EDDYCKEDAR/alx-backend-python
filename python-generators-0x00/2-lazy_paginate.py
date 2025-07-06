@@ -29,25 +29,15 @@ def connect_to_prodev():
 
 
 def stream_users_in_batches(batch_size):
-    """
-    Generator function that fetches user data from database in batches.
-    
-    Args:
-        batch_size (int): Number of rows to fetch per batch
-        
-    Yields:
-        list: Batch of user records as dictionaries
-    """
     connection = connect_to_prodev()
     if not connection:
-        return
+        yield from ()  # avoids using 'return'
     
     try:
         cursor = connection.cursor(dictionary=True)
         cursor.execute("SELECT user_id, name, email, age FROM user_data")
         
         while True:
-            # Fetch batch_size number of rows
             batch = cursor.fetchmany(batch_size)
             if not batch:
                 break
