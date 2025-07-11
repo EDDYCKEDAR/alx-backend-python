@@ -1,5 +1,6 @@
 import sqlite3
 import functools
+from datetime import datetime
 
 def log_queries(func):
     """
@@ -17,7 +18,7 @@ def log_queries(func):
         else:
             query = "Unknown query"
         
-        print(f"Executing SQL Query: {query}")
+        print(f"[{datetime.now()}] Executing SQL Query: {query}")
         
         # Execute the original function
         return func(*args, **kwargs)
