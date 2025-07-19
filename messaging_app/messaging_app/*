@@ -1,0 +1,709 @@
+# Django Messaging App Implementation Guide
+
+## Project Overview
+This guide walks through building a robust messaging API using Django and Django REST Framework, following the project specifications for creating a scalable messaging system with users, conversations, and messages.
+
+## Task 0: Project Setup
+
+### 1. Initialize Django Project
+```bash
+# Create the project
+django-admin startproject messaging_app
+cd messaging_app
+
+# Create virtual environment (recommended)
+python -m venv venv
+source venv/bin/activate  # On Windows: venv\Scripts\activate
+
+# Install dependencies
+pip install django djangorestframework django-cors-headers python-decouple
+pip freeze > requirements.txt
+```
+
+### 2. Update settings.py
+```python
+# messaging_app/settings.py
+import os
+from pathlib import Path
+from decouple import config
+
+BASE_DIR = Path(__file__).resolve().parent.parent
+
+# SECURITY WARNING: keep the secret key used in production secret!
+SECRET_KEY = config('SECRET_KEY', default='your-secret-key-here')
+
+# SECURITY WARNING: don't run with debug turned on in production!
+DEBUG = config('DEBUG', default=True, cast=bool)
+
+ALLOWED_HOSTS = ['localhost', '127.0.0.1']
+
+# Application definition
+INSTALLED_APPS = [
+    'django.contrib.admin',
+    'django.contrib.auth',
+    'django.contrib.contenttypes',
+    'django.contrib.sessions',
+    'django.contrib.messages',
+    'django.contrib.staticfiles',
+    'rest_framework',
+    'corsheaders',
+    'chats',  # Our messaging app
+]
+
+MIDDLEWARE = [
+    'corsheaders.middleware.CorsMiddleware',
+    'django.middleware.security.SecurityMiddleware',
+    'django.contrib.sessions.middleware.SessionMiddleware',
+    'django.middleware.common.CommonMiddleware',
+    'django.middleware.csrf.CsrfViewMiddleware',
+    'django.contrib.auth.middleware.AuthenticationMiddleware',
+    'django.contrib.messages.middleware.MessageMiddleware',
+    'django.middleware.clickjacking.XFrameOptionsMiddleware',
+]
+
+ROOT_URLCONF = 'messaging_app.urls'
+
+TEMPLATES = [
+    {
+        'BACKEND': 'django.template.backends.django.DjangoTemplates',
+        'DIRS': [],
+        'APP_DIRS': True,
+        'OPTIONS': {
+            'context_processors': [
+                'django.template.context_processors.debug',
+                'django.template.context_processors.request',
+                'django.contrib.auth.context_processors.auth',
+                'django.contrib.messages.context_processors.messages',
+            ],
+        },
+    },
+]
+
+WSGI_APPLICATION = 'messaging_app.wsgi.application'
+
+# Database
+DATABASES = {
+    'default': {
+        'ENGINE': 'django.db.backends.sqlite3',
+        'NAME': BASE_DIR / 'db.sqlite3',
+    }
+}
+
+# REST Framework configuration
+REST_FRAMEWORK = {
+    'DEFAULT_PERMISSION_CLASSES': [
+        'rest_framework.permissions.IsAuthenticated',
+    ],
+    'DEFAULT_AUTHENTICATION_CLASSES': [
+        'rest_framework.authentication.SessionAuthentication',
+        'rest_framework.authentication.TokenAuthentication',
+    ],
+    'DEFAULT_PAGINATION_CLASS': 'rest_framework.pagination.PageNumberPagination',
+    'PAGE_SIZE': 20
+}
+
+# CORS settings
+CORS_ALLOWED_ORIGINS = [
+    "http://localhost:3000",
+    "http://127.0.0.1:3000",
+]
+
+# Internationalization
+LANGUAGE_CODE = 'en-us'
+TIME_ZONE = 'UTC'
+USE_I18N = True
+USE_TZ = True
+
+# Static files (CSS, JavaScript, Images)
+STATIC_URL = 'static/'
+
+# Default primary key field type
+DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
+
+# Custom user model
+AUTH_USER_MODEL = 'chats.User'
+```
+
+### 3. Create the chats app
+```bash
+python manage.py startapp chats
+```
+
+## Task 1: Define Data Models
+
+### Create models.py
+```python
+# chats/models.py
+import uuid
+from django.contrib.auth.models import AbstractUser
+from django.db import models
+from django.conf import settings
+
+class User(AbstractUser):
+    """Extended user model with additional fields"""
+    
+    ROLE_CHOICES = [
+        ('guest', 'Guest'),
+        ('host', 'Host'),
+        ('admin', 'Admin'),
+    ]
+    
+    user_id = models.UUIDField(
+        primary_key=True, 
+        default=uuid.uuid4, 
+        editable=False,
+        db_index=True
+    )
+    first_name = models.CharField(max_length=150)
+    last_name = models.CharField(max_length=150)
+    email = models.EmailField(unique=True)
+    phone_number = models.CharField(max_length=15, blank=True, null=True)
+    role = models.CharField(max_length=10, choices=ROLE_CHOICES, default='guest')
+    created_at = models.DateTimeField(auto_now_add=True)
+    
+    # Override username field to use email
+    USERNAME_FIELD = 'email'
+    REQUIRED_FIELDS = ['username', 'first_name', 'last_name']
+    
+    class Meta:
+        db_table = 'users'
+        indexes = [
+            models.Index(fields=['email']),
+        ]
+    
+    def __str__(self):
+        return f"{self.first_name} {self.last_name} ({self.email})"
+
+class Conversation(models.Model):
+    """Model representing a conversation between multiple users"""
+    
+    conversation_id = models.UUIDField(
+        primary_key=True, 
+        default=uuid.uuid4, 
+        editable=False,
+        db_index=True
+    )
+    participants = models.ManyToManyField(
+        settings.AUTH_USER_MODEL,
+        related_name='conversations',
+        blank=False
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    
+    class Meta:
+        db_table = 'conversations'
+        ordering = ['-created_at']
+    
+    def __str__(self):
+        participant_names = ", ".join([
+            f"{p.first_name} {p.last_name}" 
+            for p in self.participants.all()[:3]
+        ])
+        if self.participants.count() > 3:
+            participant_names += "..."
+        return f"Conversation: {participant_names}"
+
+class Message(models.Model):
+    """Model representing a message in a conversation"""
+    
+    message_id = models.UUIDField(
+        primary_key=True, 
+        default=uuid.uuid4, 
+        editable=False,
+        db_index=True
+    )
+    sender = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name='sent_messages'
+    )
+    conversation = models.ForeignKey(
+        Conversation,
+        on_delete=models.CASCADE,
+        related_name='messages'
+    )
+    message_body = models.TextField()
+    sent_at = models.DateTimeField(auto_now_add=True)
+    
+    class Meta:
+        db_table = 'messages'
+        ordering = ['sent_at']
+        indexes = [
+            models.Index(fields=['conversation', 'sent_at']),
+            models.Index(fields=['sender']),
+        ]
+    
+    def __str__(self):
+        return f"Message from {self.sender.first_name}: {self.message_body[:50]}..."
+```
+
+## Task 2: Create Serializers
+
+### Create serializers.py
+```python
+# chats/serializers.py
+from rest_framework import serializers
+from .models import User, Conversation, Message
+
+class UserSerializer(serializers.ModelSerializer):
+    """Serializer for User model"""
+    
+    class Meta:
+        model = User
+        fields = [
+            'user_id', 'username', 'email', 'first_name', 
+            'last_name', 'phone_number', 'role', 'created_at'
+        ]
+        read_only_fields = ['user_id', 'created_at']
+        extra_kwargs = {
+            'password': {'write_only': True}
+        }
+
+class MessageSerializer(serializers.ModelSerializer):
+    """Serializer for Message model"""
+    
+    sender = UserSerializer(read_only=True)
+    sender_id = serializers.UUIDField(write_only=True, required=False)
+    
+    class Meta:
+        model = Message
+        fields = [
+            'message_id', 'sender', 'sender_id', 'conversation', 
+            'message_body', 'sent_at'
+        ]
+        read_only_fields = ['message_id', 'sent_at', 'sender']
+    
+    def create(self, validated_data):
+        # Set sender from request user
+        request = self.context.get('request')
+        if request and request.user:
+            validated_data['sender'] = request.user
+        return super().create(validated_data)
+
+class ConversationSerializer(serializers.ModelSerializer):
+    """Serializer for Conversation model"""
+    
+    participants = UserSerializer(many=True, read_only=True)
+    participant_ids = serializers.ListField(
+        child=serializers.UUIDField(),
+        write_only=True,
+        required=False
+    )
+    messages = MessageSerializer(many=True, read_only=True)
+    participants_count = serializers.SerializerMethodField()
+    last_message = serializers.SerializerMethodField()
+    
+    class Meta:
+        model = Conversation
+        fields = [
+            'conversation_id', 'participants', 'participant_ids',
+            'messages', 'participants_count', 'last_message', 'created_at'
+        ]
+        read_only_fields = ['conversation_id', 'created_at']
+    
+    def get_participants_count(self, obj):
+        return obj.participants.count()
+    
+    def get_last_message(self, obj):
+        last_message = obj.messages.last()
+        if last_message:
+            return MessageSerializer(last_message).data
+        return None
+    
+    def create(self, validated_data):
+        participant_ids = validated_data.pop('participant_ids', [])
+        conversation = Conversation.objects.create()
+        
+        # Add current user as participant
+        request = self.context.get('request')
+        if request and request.user:
+            conversation.participants.add(request.user)
+        
+        # Add other participants
+        if participant_ids:
+            users = User.objects.filter(user_id__in=participant_ids)
+            conversation.participants.add(*users)
+        
+        return conversation
+
+class ConversationListSerializer(serializers.ModelSerializer):
+    """Simplified serializer for listing conversations"""
+    
+    participants = UserSerializer(many=True, read_only=True)
+    participants_count = serializers.SerializerMethodField()
+    last_message = serializers.SerializerMethodField()
+    unread_count = serializers.SerializerMethodField()
+    
+    class Meta:
+        model = Conversation
+        fields = [
+            'conversation_id', 'participants', 'participants_count',
+            'last_message', 'unread_count', 'created_at'
+        ]
+    
+    def get_participants_count(self, obj):
+        return obj.participants.count()
+    
+    def get_last_message(self, obj):
+        last_message = obj.messages.last()
+        if last_message:
+            return {
+                'message_body': last_message.message_body,
+                'sent_at': last_message.sent_at,
+                'sender': last_message.sender.first_name
+            }
+        return None
+    
+    def get_unread_count(self, obj):
+        # Placeholder for unread message count
+        # This would require additional tracking in a real application
+        return 0
+```
+
+## Task 3: Build API Endpoints with Views
+
+### Create views.py
+```python
+# chats/views.py
+from rest_framework import viewsets, status, permissions
+from rest_framework.decorators import action
+from rest_framework.response import Response
+from django.shortcuts import get_object_or_404
+from django.db.models import Q
+from .models import User, Conversation, Message
+from .serializers import (
+    UserSerializer, ConversationSerializer, ConversationListSerializer,
+    MessageSerializer
+)
+
+class UserViewSet(viewsets.ModelViewSet):
+    """ViewSet for managing users"""
+    
+    queryset = User.objects.all()
+    serializer_class = UserSerializer
+    permission_classes = [permissions.IsAuthenticated]
+    lookup_field = 'user_id'
+    
+    def get_queryset(self):
+        """Filter users based on search query if provided"""
+        queryset = User.objects.all()
+        search = self.request.query_params.get('search', None)
+        if search:
+            queryset = queryset.filter(
+                Q(first_name__icontains=search) |
+                Q(last_name__icontains=search) |
+                Q(email__icontains=search)
+            )
+        return queryset
+
+class ConversationViewSet(viewsets.ModelViewSet):
+    """ViewSet for managing conversations"""
+    
+    serializer_class = ConversationSerializer
+    permission_classes = [permissions.IsAuthenticated]
+    lookup_field = 'conversation_id'
+    
+    def get_queryset(self):
+        """Return conversations where the current user is a participant"""
+        return Conversation.objects.filter(
+            participants=self.request.user
+        ).prefetch_related('participants', 'messages__sender')
+    
+    def get_serializer_class(self):
+        """Use different serializers for list vs detail views"""
+        if self.action == 'list':
+            return ConversationListSerializer
+        return ConversationSerializer
+    
+    def create(self, request, *args, **kwargs):
+        """Create a new conversation"""
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        conversation = serializer.save()
+        
+        # Return detailed conversation data
+        detail_serializer = ConversationSerializer(
+            conversation, 
+            context={'request': request}
+        )
+        return Response(
+            detail_serializer.data, 
+            status=status.HTTP_201_CREATED
+        )
+    
+    @action(detail=True, methods=['post'])
+    def add_participant(self, request, conversation_id=None):
+        """Add a participant to an existing conversation"""
+        conversation = self.get_object()
+        user_id = request.data.get('user_id')
+        
+        if not user_id:
+            return Response(
+                {'error': 'user_id is required'}, 
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        try:
+            user = User.objects.get(user_id=user_id)
+            conversation.participants.add(user)
+            return Response(
+                {'message': f'{user.first_name} {user.last_name} added to conversation'},
+                status=status.HTTP_200_OK
+            )
+        except User.DoesNotExist:
+            return Response(
+                {'error': 'User not found'}, 
+                status=status.HTTP_404_NOT_FOUND
+            )
+    
+    @action(detail=True, methods=['post'])
+    def remove_participant(self, request, conversation_id=None):
+        """Remove a participant from a conversation"""
+        conversation = self.get_object()
+        user_id = request.data.get('user_id')
+        
+        if not user_id:
+            return Response(
+                {'error': 'user_id is required'}, 
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        try:
+            user = User.objects.get(user_id=user_id)
+            conversation.participants.remove(user)
+            return Response(
+                {'message': f'{user.first_name} {user.last_name} removed from conversation'},
+                status=status.HTTP_200_OK
+            )
+        except User.DoesNotExist:
+            return Response(
+                {'error': 'User not found'}, 
+                status=status.HTTP_404_NOT_FOUND
+            )
+
+class MessageViewSet(viewsets.ModelViewSet):
+    """ViewSet for managing messages"""
+    
+    serializer_class = MessageSerializer
+    permission_classes = [permissions.IsAuthenticated]
+    lookup_field = 'message_id'
+    
+    def get_queryset(self):
+        """Return messages from conversations where user is a participant"""
+        conversation_id = self.request.query_params.get('conversation_id')
+        
+        # Base queryset - messages from user's conversations
+        queryset = Message.objects.filter(
+            conversation__participants=self.request.user
+        ).select_related('sender', 'conversation')
+        
+        # Filter by specific conversation if provided
+        if conversation_id:
+            queryset = queryset.filter(conversation__conversation_id=conversation_id)
+        
+        return queryset.order_by('sent_at')
+    
+    def create(self, request, *args, **kwargs):
+        """Create a new message"""
+        # Validate that user is participant in the conversation
+        conversation_id = request.data.get('conversation')
+        if conversation_id:
+            try:
+                conversation = Conversation.objects.get(
+                    conversation_id=conversation_id,
+                    participants=request.user
+                )
+            except Conversation.DoesNotExist:
+                return Response(
+                    {'error': 'Conversation not found or access denied'}, 
+                    status=status.HTTP_403_FORBIDDEN
+                )
+        
+        return super().create(request, *args, **kwargs)
+    
+    @action(detail=False, methods=['get'])
+    def by_conversation(self, request):
+        """Get messages for a specific conversation"""
+        conversation_id = request.query_params.get('conversation_id')
+        
+        if not conversation_id:
+            return Response(
+                {'error': 'conversation_id is required'}, 
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # Verify user is participant in conversation
+        try:
+            conversation = Conversation.objects.get(
+                conversation_id=conversation_id,
+                participants=request.user
+            )
+        except Conversation.DoesNotExist:
+            return Response(
+                {'error': 'Conversation not found or access denied'}, 
+                status=status.HTTP_403_FORBIDDEN
+            )
+        
+        messages = Message.objects.filter(
+            conversation=conversation
+        ).select_related('sender').order_by('sent_at')
+        
+        serializer = self.get_serializer(messages, many=True)
+        return Response(serializer.data)
+```
+
+## Task 4: Set Up URL Routing
+
+### Create chats/urls.py
+```python
+# chats/urls.py
+from django.urls import path, include
+from rest_framework.routers import DefaultRouter
+from .views import UserViewSet, ConversationViewSet, MessageViewSet
+
+# Create router and register viewsets
+router = DefaultRouter()
+router.register(r'users', UserViewSet, basename='user')
+router.register(r'conversations', ConversationViewSet, basename='conversation')
+router.register(r'messages', MessageViewSet, basename='message')
+
+urlpatterns = [
+    path('', include(router.urls)),
+]
+```
+
+### Update main URLs
+```python
+# messaging_app/urls.py
+from django.contrib import admin
+from django.urls import path, include
+
+urlpatterns = [
+    path('admin/', admin.site.urls),
+    path('api/', include('chats.urls')),
+    path('api-auth/', include('rest_framework.urls')),
+]
+```
+
+## Task 5: Run the Application
+
+### Create and run migrations
+```bash
+# Create migrations
+python manage.py makemigrations
+
+# Apply migrations
+python manage.py migrate
+
+# Create superuser (optional)
+python manage.py createsuperuser
+
+# Run development server
+python manage.py runserver
+```
+
+### Create admin.py for Django Admin interface
+```python
+# chats/admin.py
+from django.contrib import admin
+from django.contrib.auth.admin import UserAdmin
+from .models import User, Conversation, Message
+
+@admin.register(User)
+class CustomUserAdmin(UserAdmin):
+    list_display = ('user_id', 'email', 'first_name', 'last_name', 'role', 'created_at')
+    list_filter = ('role', 'created_at', 'is_staff', 'is_active')
+    search_fields = ('email', 'first_name', 'last_name')
+    ordering = ('-created_at',)
+    
+    fieldsets = UserAdmin.fieldsets + (
+        ('Additional Info', {
+            'fields': ('phone_number', 'role')
+        }),
+    )
+
+@admin.register(Conversation)
+class ConversationAdmin(admin.ModelAdmin):
+    list_display = ('conversation_id', 'created_at', 'participant_count')
+    list_filter = ('created_at',)
+    search_fields = ('participants__email', 'participants__first_name')
+    readonly_fields = ('conversation_id', 'created_at')
+    
+    def participant_count(self, obj):
+        return obj.participants.count()
+    participant_count.short_description = 'Participants'
+
+@admin.register(Message)
+class MessageAdmin(admin.ModelAdmin):
+    list_display = ('message_id', 'sender', 'conversation', 'message_preview', 'sent_at')
+    list_filter = ('sent_at',)
+    search_fields = ('sender__email', 'message_body')
+    readonly_fields = ('message_id', 'sent_at')
+    
+    def message_preview(self, obj):
+        return obj.message_body[:50] + "..." if len(obj.message_body) > 50 else obj.message_body
+    message_preview.short_description = 'Message Preview'
+```
+
+## API Endpoints
+
+The application will provide the following REST API endpoints:
+
+### Users
+- `GET /api/users/` - List all users
+- `POST /api/users/` - Create a new user
+- `GET /api/users/{user_id}/` - Get user details
+- `PUT /api/users/{user_id}/` - Update user
+- `DELETE /api/users/{user_id}/` - Delete user
+
+### Conversations
+- `GET /api/conversations/` - List user's conversations
+- `POST /api/conversations/` - Create new conversation
+- `GET /api/conversations/{conversation_id}/` - Get conversation details
+- `POST /api/conversations/{conversation_id}/add_participant/` - Add participant
+- `POST /api/conversations/{conversation_id}/remove_participant/` - Remove participant
+
+### Messages
+- `GET /api/messages/` - List messages (optionally filtered by conversation)
+- `POST /api/messages/` - Send a new message
+- `GET /api/messages/{message_id}/` - Get message details
+- `GET /api/messages/by_conversation/?conversation_id={id}` - Get messages for a conversation
+
+## Environment Setup
+
+Create a `.env` file in the project root:
+```env
+SECRET_KEY=your-secret-key-here
+DEBUG=True
+DATABASE_URL=sqlite:///db.sqlite3
+```
+
+## Testing
+
+Use tools like Postman, curl, or the Django REST Framework browsable API at `http://127.0.0.1:8000/api/` to test your endpoints.
+
+### Example API Usage
+
+1. **Create a conversation:**
+```json
+POST /api/conversations/
+{
+    "participant_ids": ["user-uuid-1", "user-uuid-2"]
+}
+```
+
+2. **Send a message:**
+```json
+POST /api/messages/
+{
+    "conversation": "conversation-uuid",
+    "message_body": "Hello, world!"
+}
+```
+
+3. **Get conversation messages:**
+```
+GET /api/messages/by_conversation/?conversation_id=conversation-uuid
+```
+
+This implementation provides a robust, scalable messaging API that follows Django and DRF best practices.
