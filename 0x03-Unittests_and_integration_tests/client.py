@@ -17,7 +17,7 @@ class GithubOrgClient:
     
     @property
     def org(self):
-        """Retrieves and returns the GitHub organization information for this client instance using the GitHub API."""
+        """Return the organization data from the GitHub API for the specified organization name."""
         if self._org_cache is None:
             url = f"https://api.github.com/orgs/{self.org_name}"
             self._org_cache = get_json(url)
@@ -37,7 +37,7 @@ class GithubOrgClient:
                 repo["name"] for repo in repos_data
                 if self.has_license(repo, license)
             ]
-        
+    
         return [repo["name"] for repo in repos_data]
     
     @staticmethod
