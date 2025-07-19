@@ -1,14 +1,11 @@
 #!/usr/bin/env python3
 """GitHub organization client module."""
-
 import requests
-
 
 def get_json(url):
     """Get JSON data from URL."""
     response = requests.get(url)
     return response.json()
-
 
 class GithubOrgClient:
     """A client for accessing GitHub organization data."""
@@ -20,7 +17,16 @@ class GithubOrgClient:
     
     @property
     def org(self):
-        """Get organization data from GitHub API."""
+        """
+        Retrieves and returns the GitHub organization information for this client instance.
+        
+        This property makes an API call to fetch comprehensive organization data
+        including metadata, settings, and all publicly available organization details.
+        Results are cached to avoid repeated API calls for the same organization.
+        
+        Returns:
+            dict: Complete organization data structure from GitHub's API response
+        """
         if self._org_cache is None:
             url = f"https://api.github.com/orgs/{self.org_name}"
             self._org_cache = get_json(url)
