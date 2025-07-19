@@ -40,15 +40,15 @@ class TestGetJson(unittest.TestCase):
     ])
     @patch('utils.requests.get')
     def test_get_json(self, test_url, test_payload, mock_get):
-        """Test that get_json returns expected result without making HTTP calls."""
+        """Test get_json returns expected result without making HTTP calls."""
         # Configure mock to return a Mock object with json method
         mock_response = Mock()
         mock_response.json.return_value = test_payload
         mock_get.return_value = mock_response
-        
+
         # Call the function and test results
         result = get_json(test_url)
-        
+
         # Assert that get was called exactly once with test_url
         mock_get.assert_called_once_with(test_url)
         # Assert that the result equals test_payload
@@ -70,16 +70,17 @@ class TestMemoize(unittest.TestCase):
 
         # Create instance and patch a_method
         test_instance = TestClass()
-        
-        with patch.object(test_instance, 'a_method', return_value=42) as mock_method:
+
+        with patch.object(test_instance, 'a_method',
+                          return_value=42) as mock_method:
             # Call a_property twice
             result1 = test_instance.a_property
             result2 = test_instance.a_property
-            
+
             # Assert correct results
             self.assertEqual(result1, 42)
             self.assertEqual(result2, 42)
-            
+
             # Assert a_method was called only once due to memoization
             mock_method.assert_called_once()
 
