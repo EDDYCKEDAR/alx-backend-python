@@ -17,16 +17,7 @@ class GithubOrgClient:
     
     @property
     def org(self):
-        """
-        Retrieves and returns the GitHub organization information for this client instance.
-        
-        This property makes an API call to fetch comprehensive organization data
-        including metadata, settings, and all publicly available organization details.
-        Results are cached to avoid repeated API calls for the same organization.
-        
-        Returns:
-            dict: Complete organization data structure from GitHub's API response
-        """
+        """Retrieves and returns the GitHub organization information for this client instance using the GitHub API."""
         if self._org_cache is None:
             url = f"https://api.github.com/orgs/{self.org_name}"
             self._org_cache = get_json(url)
