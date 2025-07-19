@@ -9,12 +9,14 @@ class User(AbstractUser):
     email = models.EmailField(unique=True)
     phone_number = models.CharField(max_length=15, blank=True, null=True)
 
+    # ✅ Add password explicitly (even though it's inherited)
+    password = models.CharField(max_length=128)
+
     REQUIRED_FIELDS = ['email', 'first_name', 'last_name']
     USERNAME_FIELD = 'username'
 
     def __str__(self):
         return f"{self.username} ({self.email})"
-
 # ✅ Conversation Model
 class Conversation(models.Model):
     conversation_id = models.UUIDField(default=uuid.uuid4, primary_key=True, editable=False)
