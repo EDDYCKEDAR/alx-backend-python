@@ -3,6 +3,9 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.exceptions import PermissionDenied
 from django.shortcuts import get_object_or_404
+from django_filters.rest_framework import DjangoFilterBackend
+from .filters import MessageFilter
+
 
 from .models import Conversation, Message
 from .serializers import ConversationSerializer, MessageSerializer
@@ -43,6 +46,9 @@ class ConversationViewSet(viewsets.ModelViewSet):
 class MessageViewSet(viewsets.ModelViewSet):
     serializer_class = MessageSerializer
     permission_classes = [IsAuthenticated, IsMessageOwnerOrParticipant]
+     filter_backends = [DjangoFilterBackend, filters.OrderingFilter]
+    filterset_class = MessageFilter
+    ordering_fields = ['created_at']
 
     def get_queryset(self):
         # ✅ Only return messages from conversations the user is part of
