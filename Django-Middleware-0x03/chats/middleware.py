@@ -7,6 +7,31 @@ Run this after setting up the Django project
 import requests
 import time
 from datetime import datetime
+from datetime import datetime
+from django.http import JsonResponse
+
+class RestrictAccessByTimeMiddleware:
+    """
+    Middleware that restricts access to /chats/ between 6AM and 9PM server time.
+    """
+
+    def __init__(self, get_response):
+        self.get_response = get_response
+
+    def __call__(self, request):
+        # Check if the request is targeting the chat endpoint
+        if request.path.startswith('/chats/'):
+            current_hour = datetime.now().hour
+
+            # Allow only between 6AM (06:00) and 9PM (21:00)
+            if current_hour < 6 or current_hour >= 21:
+                return JsonResponse(
+                    {'error': 'Chat access is only allowed between 06:00 and 21:00.'},
+                    status=403
+                )
+
+        # Otherwise continue processing
+        return self.get_response(request)
 
 def test_middleware():
     """Test all middleware components"""
