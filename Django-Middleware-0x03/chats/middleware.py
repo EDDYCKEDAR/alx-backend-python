@@ -63,3 +63,34 @@ class OffensiveLanguageMiddleware:
                 )
 
         return self.get_response(request)
+
+class RolepermissionMiddleware:
+    """
+    Middleware that restricts access to /chats/ based on user roles.
+    Only users with role 'admin' or 'moderator' are allowed.
+    """
+
+    ALLOWED_ROLES = ['admin', 'moderator']
+
+    def __init__(self, get_response):
+        self.get_response = get_response
+
+    def __call__(self, request):
+        # Only apply to chat paths
+        if request.path.startswith('/chats/'):
+            user = request.user
+            if user.is_authenticated:
+                # Check if user role (group name or custom field) is allowed
+                user_groups = user.groups.values_list('name', flat=True)
+                if not any(role in self.ALLOWED_ROLES for role in user_groups):
+                    return JsonResponse(
+                        {'error': 'Access denied. You do not have the required role.'},
+                        status=403
+                    )
+            else:
+                return JsonResponse(
+                    {'error': 'Authentication required.'},
+                    status=403
+                )
+
+        return self.get_response(request)
