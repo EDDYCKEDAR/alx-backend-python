@@ -38,3 +38,28 @@ class RestrictAccessByTimeMiddleware:
                     status=403
                 )
         return self.get_response(request)
+
+class OffensiveLanguageMiddleware:
+    """
+    Middleware to block requests that contain offensive language.
+    """
+
+    OFFENSIVE_WORDS = ['badword1', 'badword2', 'exampleword']  # Replace with real words
+
+    def __init__(self, get_response):
+        self.get_response = get_response
+
+    def __call__(self, request):
+        if request.method == "POST" and request.path.startswith("/chats/"):
+            body = request.POST.dict()
+
+            # Combine all values in POST data to scan for bad words
+            combined_text = " ".join(str(value).lower() for value in body.values())
+
+            if any(word in combined_text for word in self.OFFENSIVE_WORDS):
+                return JsonResponse(
+                    {'error': 'Your message contains offensive language.'},
+                    status=403
+                )
+
+        return self.get_response(request)
