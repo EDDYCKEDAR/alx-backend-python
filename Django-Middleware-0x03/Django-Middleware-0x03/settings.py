@@ -14,6 +14,7 @@ MIDDLEWARE = [
     'chats.middleware.RestrictAccessByTimeMiddleware',    # Time-based access control
     'chats.middleware.RolePermissionMiddleware',          # Role-based access control
     'chats.middleware.OffensiveLanguageMiddleware',       # Rate limiting
+    'chats.middleware.RolepermissionMiddleware',
 ]
 
 # Optional: Configure logging settings
