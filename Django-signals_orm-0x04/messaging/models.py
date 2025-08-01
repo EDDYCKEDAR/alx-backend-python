@@ -23,12 +23,13 @@ class Notification(models.Model):
         return f"Notification for {self.user.username}"
 
 class MessageHistory(models.Model):
-    message = models.ForeignKey(Message, on_delete=models.CASCADE, related_name='histories')
+    message = models.ForeignKey(Message, on_delete=models.CASCADE, related_name='history')
     old_content = models.TextField()
     edited_at = models.DateTimeField(auto_now_add=True)
+    edited_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True)  
 
     def __str__(self):
-        return f"Edit history of message {self.message.id}"
+        return f"History for message {self.message.id} at {self.edited_at}"
 
 class UnreadMessagesManager(models.Manager):
     def for_user(self, user):
