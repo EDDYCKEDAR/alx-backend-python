@@ -10,7 +10,11 @@ from .models import Message
 @login_required
 def message_list_view(request):
     messages_list = Message.objects.filter(receiver=request.user).select_related('sender').prefetch_related('replies')
-    return render(request, 'messaging/message_list.html', { 'messages': messages_list })
+    sent_messages = Message.objects.filter(sender=request.user).select_related('receiver').prefetch_related('replies')
+    return render(request, 'messaging/message_list.html', {
+        'messages': messages_list,
+        'sent_messages': sent_messages
+    })
 
 @login_required
 def delete_user(request):
