@@ -1,0 +1,11 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: messaging-blue-green-service
+spec:
+  selector:
+    app: django-green  # Initially route to green
+  ports:
+    - port: 80
+      targetPort: 8000
+  type: ClusterIP
