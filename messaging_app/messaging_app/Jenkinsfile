@@ -10,7 +10,7 @@ pipeline {
             steps {
                 git credentialsId: 'github-credentials-id',
                     url: "${GITHUB_REPO}",
-                    branch: 'main'
+                    git branch: 'main'
             }
         }
 
