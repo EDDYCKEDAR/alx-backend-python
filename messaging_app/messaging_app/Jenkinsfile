@@ -16,13 +16,17 @@ pipeline {
 
         stage('Install dependencies') {
             steps {
-                sh 'pip3 install -r messaging_app/requirements.txt'
+                withPythonEnv('Python 3') {
+                    sh 'pip install -r messaging_app/requirements.txt'
+                }
             }
         }
 
         stage('Run tests') {
             steps {
-                sh 'pytest messaging_app/tests/ --junitxml=test-results.xml'
+                withPythonEnv('Python 3') {
+                    sh 'pytest messaging_app/tests/ --junitxml=test-results.xml'
+                }
             }
         }
 
