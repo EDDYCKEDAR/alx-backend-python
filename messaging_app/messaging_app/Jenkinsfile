@@ -1,0 +1,37 @@
+pipeline {
+    agent any
+
+    environment {
+        GITHUB_REPO = 'https://github.com/YOUR_USERNAME/alx-backend-python.git'
+    }
+
+    stages {
+        stage('Clone repository') {
+            steps {
+                git url: "${GITHUB_REPO}", branch: 'main'
+            }
+        }
+
+        stage('Install dependencies') {
+            steps {
+                withPythonEnv('Python 3') {
+                    sh 'pip install -r messaging_app/requirements.txt'
+                }
+            }
+        }
+
+        stage('Run tests') {
+            steps {
+                withPythonEnv('Python 3') {
+                    sh 'pytest messaging_app/tests/ --junitxml=test-results.xml'
+                }
+            }
+        }
+
+        stage('Archive Test Report') {
+            steps {
+                junit 'test-results.xml'
+            }
+        }
+    }
+}
