@@ -2,29 +2,27 @@ pipeline {
     agent any
 
     environment {
-        GITHUB_REPO = 'https://github.com/YOUR_USERNAME/alx-backend-python.git'
+        GITHUB_REPO = 'https://github.com/EDDYCKEDAR/alx-backend-python.git'
     }
 
     stages {
         stage('Clone repository') {
             steps {
-                git url: "${GITHUB_REPO}", branch: 'main'
+                git credentialsId: 'github-credentials-id',
+                    url: "${GITHUB_REPO}",
+                    branch: 'main'
             }
         }
 
         stage('Install dependencies') {
             steps {
-                withPythonEnv('Python 3') {
-                    sh 'pip install -r messaging_app/requirements.txt'
-                }
+                sh 'pip3 install -r messaging_app/requirements.txt'
             }
         }
 
         stage('Run tests') {
             steps {
-                withPythonEnv('Python 3') {
-                    sh 'pytest messaging_app/tests/ --junitxml=test-results.xml'
-                }
+                sh 'pytest messaging_app/tests/ --junitxml=test-results.xml'
             }
         }
 
@@ -33,11 +31,11 @@ pipeline {
                 junit 'test-results.xml'
             }
         }
-    }
-            stage('Build Docker Image') {
+
+        stage('Build Docker Image') {
             steps {
                 script {
-                    dockerImage = docker.build("yourdockerhubuser/messaging_app:${env.BUILD_NUMBER}")
+                    dockerImage = docker.build("eddyckedar/messaging_app:${env.BUILD_NUMBER}")
                 }
             }
         }
@@ -51,5 +49,5 @@ pipeline {
                 }
             }
         }
-
+    }
 }
